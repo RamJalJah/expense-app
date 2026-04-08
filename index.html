@@ -115,6 +115,29 @@ body {
 
 .btn-add:active { transform: scale(0.92); }
 
+.btn-sign {
+  background: var(--card2);
+  color: var(--text);
+  border: 2px solid var(--card2);
+  border-radius: 12px;
+  flex: 0 0 44px;
+  width: 44px;
+  font-size: 22px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-sign.negative {
+  background: rgba(248,113,113,0.15);
+  color: var(--red);
+  border-color: var(--red);
+}
+
 /* ---- Dashboard Cards ---- */
 .dashboard {
   padding: 16px;
@@ -536,9 +559,10 @@ body {
   <div class="quick-entry">
     <h1>Quick Expense</h1>
     <div class="entry-row">
-      <input type="number" id="inp-amount" placeholder="NT$" inputmode="decimal">
+      <button class="btn-sign" id="btn-sign">+</button>
+      <input type="number" id="inp-amount" placeholder="0" inputmode="decimal" min="0">
       <input type="text" id="inp-desc" placeholder="What for?" autocomplete="off">
-      <button class="btn-add" id="btn-add">+</button>
+      <button class="btn-add" id="btn-add">&#10003;</button>
     </div>
   </div>
 
@@ -1032,6 +1056,15 @@ function showToast(msg) {
 // EVENT HANDLERS
 // ============================================================
 
+// Sign toggle
+let isNegative = false;
+document.getElementById('btn-sign').addEventListener('click', () => {
+  isNegative = !isNegative;
+  const btn = document.getElementById('btn-sign');
+  btn.textContent = isNegative ? '−' : '+';
+  btn.classList.toggle('negative', isNegative);
+});
+
 // Add expense
 document.getElementById('btn-add').addEventListener('click', submitExpense);
 document.getElementById('inp-amount').addEventListener('keydown', e => { if (e.key === 'Enter') submitExpense(); });
@@ -1040,9 +1073,14 @@ document.getElementById('inp-desc').addEventListener('keydown', e => { if (e.key
 function submitExpense() {
   const amtEl = document.getElementById('inp-amount');
   const descEl = document.getElementById('inp-desc');
-  const amt = parseFloat(amtEl.value);
+  let amt = parseFloat(amtEl.value);
   if (isNaN(amt) || amt === 0) { amtEl.focus(); return; }
+  if (isNegative) amt = -Math.abs(amt);
   addExpense(amt, descEl.value.trim());
+  // reset sign to positive
+  isNegative = false;
+  document.getElementById('btn-sign').textContent = '+';
+  document.getElementById('btn-sign').classList.remove('negative');
   amtEl.value = '';
   descEl.value = '';
   amtEl.focus();
