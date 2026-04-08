@@ -91,14 +91,16 @@ body {
   color: var(--bg);
   border: none;
   border-radius: 12px;
-  width: 52px;
-  font-size: 28px;
+  min-width: 64px;
+  width: 64px;
+  font-size: 36px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 0.1s, opacity 0.2s;
+  flex-shrink: 0;
 }
 
 .btn-add:active { transform: scale(0.92); }
@@ -524,7 +526,7 @@ body {
   <div class="quick-entry">
     <h1>Quick Expense</h1>
     <div class="entry-row">
-      <input type="number" id="inp-amount" placeholder="NT$" inputmode="numeric" pattern="[0-9]*">
+      <input type="number" id="inp-amount" placeholder="NT$" inputmode="decimal">
       <input type="text" id="inp-desc" placeholder="What for?" autocomplete="off">
       <button class="btn-add" id="btn-add">+</button>
     </div>
@@ -582,9 +584,9 @@ body {
     </div>
   </div>
 
-  <!-- Today's expenses -->
+  <!-- This month's expenses -->
   <div class="today-list">
-    <div class="section-title">Today's Expenses</div>
+    <div class="section-title">This Month's Expenses</div>
     <div id="today-expenses"></div>
   </div>
 </div>
@@ -757,24 +759,41 @@ function renderHome() {
   document.getElementById('remaining-month').textContent = fmt(Math.max(0, remMonth));
   document.getElementById('remaining-month').style.color = remMonth < 0 ? 'var(--red)' : 'var(--green)';
 
-  // Today's expense list
+  // This month's expense list grouped by day
   const container = document.getElementById('today-expenses');
-  if (todayData.length === 0) {
-    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-size:14px;">No expenses yet today</div>';
+  if (monthData.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-size:14px;">No expenses yet this month</div>';
   } else {
-    container.innerHTML = todayData
-      .sort((a,b) => b.id - a.id)
-      .map(e => {
-        const t = new Date(e.ts);
-        const timeStr = t.getHours().toString().padStart(2,'0') + ':' + t.getMinutes().toString().padStart(2,'0');
-        return `<div class="expense-item" data-id="${e.id}">
-          <div>
-            <div class="desc">${escHTML(e.desc)}</div>
-            <div class="time">${timeStr}</div>
-          </div>
-          <div class="amount">${fmt(e.amount)}</div>
-        </div>`;
-      }).join('');
+    const byDay = {};
+    monthData.forEach(e => {
+      const dk = getDateKey(new Date(e.ts));
+      if (!byDay[dk]) byDay[dk] = [];
+      byDay[dk].push(e);
+    });
+    const dayKeys = Object.keys(byDay).sort().reverse();
+    const todayKey = dk;
+    container.innerHTML = dayKeys.map(dayKey => {
+      const dayItems = byDay[dayKey];
+      const dayTotal = dayItems.reduce((s,e) => s + e.amount, 0);
+      const dayNum = parseInt(dayKey.split('-')[2]);
+      const dayColor = dayTotal > DAILY_BUDGET ? 'var(--red)' : dayTotal > DAILY_BUDGET * 0.8 ? 'var(--yellow)' : 'var(--green)';
+      const label = dayKey === todayKey ? 'Today' : `Day ${dayNum}`;
+      return `<div style="font-size:13px;font-weight:600;color:var(--muted);display:flex;justify-content:space-between;margin:14px 0 6px;text-transform:uppercase;letter-spacing:0.8px">
+          <span>${label}</span><span style="color:${dayColor}">${fmt(dayTotal)}</span>
+        </div>` +
+        dayItems.sort((a,b) => b.id - a.id).map(e => {
+          const t = new Date(e.ts);
+          const timeStr = t.getHours().toString().padStart(2,'0') + ':' + t.getMinutes().toString().padStart(2,'0');
+          const amtColor = e.amount < 0 ? 'var(--green)' : 'var(--text)';
+          return `<div class="expense-item" data-id="${e.id}">
+            <div>
+              <div class="desc">${escHTML(e.desc)}</div>
+              <div class="time">${timeStr}</div>
+            </div>
+            <div class="amount" style="color:${amtColor}">${fmt(e.amount)}</div>
+          </div>`;
+        }).join('');
+    }).join('');
   }
 }
 
@@ -1012,7 +1031,7 @@ function submitExpense() {
   const amtEl = document.getElementById('inp-amount');
   const descEl = document.getElementById('inp-desc');
   const amt = parseFloat(amtEl.value);
-  if (!amt || amt <= 0) { amtEl.focus(); return; }
+  if (isNaN(amt) || amt === 0) { amtEl.focus(); return; }
   addExpense(amt, descEl.value.trim());
   amtEl.value = '';
   descEl.value = '';
