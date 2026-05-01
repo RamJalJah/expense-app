@@ -591,7 +591,10 @@ body {
 
     <!-- Budget status -->
     <div class="card">
-      <div class="card-label">Budget Status (NT$ 800/day)</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div class="card-label" id="budget-label" style="margin:0">Budget Status (NT$ 800/day)</div>
+        <button id="btn-edit-budget" style="background:var(--card2);color:var(--accent);border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer">Edit</button>
+      </div>
       <div id="budget-status"></div>
       <div class="budget-bar-wrap">
         <div class="budget-bar">
@@ -629,6 +632,20 @@ body {
 <div class="page" id="page-history">
   <div class="dashboard">
     <h1 style="font-size:22px; font-weight:800; margin-bottom:4px;">History</h1>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-label" style="margin-bottom:10px">Add Past Expense</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input type="date" id="past-date" style="background:var(--card2);border:2px solid var(--card2);border-radius:10px;color:var(--text);font-size:15px;padding:10px;outline:none">
+        <div style="display:flex;gap:8px">
+          <button class="btn-sign" id="past-sign" style="flex:0 0 44px">+</button>
+          <input type="number" id="past-amount" placeholder="NT$" inputmode="decimal" min="0" style="flex:0 0 110px;width:110px;background:var(--card2);border:2px solid var(--card2);border-radius:10px;color:var(--text);font-size:18px;font-weight:700;text-align:center;padding:10px;outline:none">
+          <input type="text" id="past-desc" placeholder="What for?" autocomplete="off" style="flex:1;min-width:0;background:var(--card2);border:2px solid var(--card2);border-radius:10px;color:var(--text);font-size:15px;padding:10px;outline:none">
+        </div>
+        <button id="btn-past-add" style="background:var(--accent);color:var(--bg);border:none;border-radius:10px;padding:12px;font-size:16px;font-weight:800;cursor:pointer">Add to History</button>
+      </div>
+    </div>
+
     <div id="history-list"></div>
   </div>
 </div>
@@ -686,8 +703,17 @@ body {
 // ============================================================
 // DATA LAYER
 // ============================================================
-const DAILY_BUDGET = 800;
 const STORAGE_KEY = 'expense_data';
+const BUDGET_KEY = 'expense_daily_budget';
+
+function getDailyBudget() {
+  const v = parseInt(localStorage.getItem(BUDGET_KEY), 10);
+  return (isNaN(v) || v <= 0) ? 800 : v;
+}
+
+function setDailyBudget(v) {
+  localStorage.setItem(BUDGET_KEY, String(v));
+}
 
 function loadData() {
   try {
@@ -699,13 +725,13 @@ function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
-function addExpense(amount, desc) {
+function addExpense(amount, desc, ts) {
   const data = loadData();
   data.push({
-    id: Date.now(),
+    id: Date.now() + Math.floor(Math.random() * 1000),
     amount: Math.round(amount),
     desc: desc || 'Expense',
-    ts: new Date().toISOString()
+    ts: ts || new Date().toISOString()
   });
   saveData(data);
 }
@@ -733,6 +759,7 @@ function daysInMonth(y, m) { return new Date(y, m+1, 0).getDate(); }
 function fmt(n) { return 'NT$ ' + Math.round(n).toLocaleString(); }
 
 function renderHome() {
+  const DAILY_BUDGET = getDailyBudget();
   const now = today();
   const mk = getMonthKey(now);
   const dk = getDateKey(now);
@@ -771,6 +798,7 @@ function renderHome() {
   fill.style.width = fillPct + '%';
   fill.style.background = pct > 100 ? 'var(--red)' : pct > 80 ? 'var(--yellow)' : 'var(--green)';
 
+  document.getElementById('budget-label').textContent = `Budget Status (NT$ ${DAILY_BUDGET}/day)`;
   document.getElementById('budget-spent').textContent = fmt(monthTotal) + ' spent';
   document.getElementById('budget-limit').textContent = fmt(budgetUsedSoFar) + ' budget';
 
@@ -871,6 +899,7 @@ function renderHistory() {
 }
 
 function openMonthDetail(mk, items) {
+  const DAILY_BUDGET = getDailyBudget();
   const [y,m] = mk.split('-').map(Number);
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   document.getElementById('detail-title').textContent = monthNames[m-1] + ' ' + y;
@@ -915,6 +944,7 @@ function openMonthDetail(mk, items) {
 }
 
 function renderTrends() {
+  const DAILY_BUDGET = getDailyBudget();
   const data = loadData();
   const container = document.getElementById('trends-content');
 
@@ -1143,6 +1173,51 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 // Back from detail
 document.getElementById('btn-back').addEventListener('click', () => {
   document.getElementById('month-detail').classList.remove('visible');
+});
+
+// Edit daily budget
+document.getElementById('btn-edit-budget').addEventListener('click', () => {
+  const current = getDailyBudget();
+  const input = prompt('Daily budget (NT$):', current);
+  if (input === null) return;
+  const v = parseInt(input, 10);
+  if (isNaN(v) || v <= 0) { showToast('Invalid amount'); return; }
+  setDailyBudget(v);
+  renderHome();
+  showToast('Budget updated');
+});
+
+// Past-expense sign toggle
+let pastNegative = false;
+document.getElementById('past-sign').addEventListener('click', () => {
+  pastNegative = !pastNegative;
+  const b = document.getElementById('past-sign');
+  b.textContent = pastNegative ? '−' : '+';
+  b.classList.toggle('negative', pastNegative);
+});
+
+// Add past expense
+document.getElementById('btn-past-add').addEventListener('click', () => {
+  const dateEl = document.getElementById('past-date');
+  const amtEl = document.getElementById('past-amount');
+  const descEl = document.getElementById('past-desc');
+  if (!dateEl.value) { showToast('Pick a date'); return; }
+  let amt = parseFloat(amtEl.value);
+  if (isNaN(amt) || amt === 0) { showToast('Enter amount'); return; }
+  if (pastNegative) amt = -Math.abs(amt);
+  // Use noon local time on chosen date so timezone shifts don't move the day
+  const [y,m,d] = dateEl.value.split('-').map(Number);
+  const ts = new Date(y, m-1, d, 12, 0, 0).toISOString();
+  addExpense(amt, descEl.value.trim(), ts);
+  amtEl.value = '';
+  descEl.value = '';
+  pastNegative = false;
+  const sb = document.getElementById('past-sign');
+  sb.textContent = '+';
+  sb.classList.remove('negative');
+  renderHistory();
+  renderHome();
+  showToast('Added to history');
 });
 
 // Initial render
