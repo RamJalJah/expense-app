@@ -634,6 +634,19 @@ body {
     <h1 style="font-size:22px; font-weight:800; margin-bottom:4px;">History</h1>
 
     <div class="card" style="margin-bottom:12px">
+      <div class="card-label" style="margin-bottom:10px">Data &amp; Backup</div>
+      <div id="storage-info" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button id="btn-export" style="flex:1;min-width:120px;background:var(--card2);color:var(--accent);border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer">Export JSON</button>
+        <button id="btn-import" style="flex:1;min-width:120px;background:var(--card2);color:var(--accent);border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer">Import JSON</button>
+        <input type="file" id="import-file" accept="application/json,.json" style="display:none">
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.4">
+        Storage is per-browser, per-URL. If your data is missing here, open the URL where you originally entered it, tap Export, then Import here.
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
       <div class="card-label" style="margin-bottom:10px">Add Past Expense</div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <input type="date" id="past-date" style="background:var(--card2);border:2px solid var(--card2);border-radius:10px;color:var(--text);font-size:15px;padding:10px;outline:none">
@@ -864,6 +877,7 @@ function renderHome() {
 }
 
 function renderHistory() {
+  renderStorageInfo();
   const data = loadData();
   const months = {};
   data.forEach(e => {
@@ -1177,6 +1191,71 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 // Back from detail
 document.getElementById('btn-back').addEventListener('click', () => {
   document.getElementById('month-detail').classList.remove('visible');
+});
+
+// Storage info / export / import
+function renderStorageInfo() {
+  const data = loadData();
+  const info = document.getElementById('storage-info');
+  if (!info) return;
+  if (data.length === 0) {
+    info.innerHTML = `<span style="color:var(--red);font-weight:700">No expenses stored on this device/browser.</span><br>Origin: ${location.origin || location.href}`;
+  } else {
+    const months = new Set(data.map(e => getMonthKey(new Date(e.ts))));
+    info.innerHTML = `<b>${data.length}</b> expenses across <b>${months.size}</b> month${months.size!==1?'s':''}.<br>Origin: ${location.origin || location.href}`;
+  }
+}
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  const data = loadData();
+  const payload = { version: 1, exportedAt: new Date().toISOString(), dailyBudget: getDailyBudget(), expenses: data };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `expenses-backup-${getDateKey(today())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Exported');
+});
+
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('import-file').click();
+});
+
+document.getElementById('import-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const incoming = Array.isArray(parsed) ? parsed : parsed.expenses;
+      if (!Array.isArray(incoming)) throw new Error('Invalid file');
+      const existing = loadData();
+      const seen = new Set(existing.map(x => x.id));
+      let added = 0;
+      incoming.forEach(item => {
+        if (item && typeof item.amount === 'number' && item.ts && !seen.has(item.id)) {
+          existing.push({ id: item.id || (Date.now() + Math.floor(Math.random()*10000)), amount: Math.round(item.amount), desc: item.desc || 'Expense', ts: item.ts });
+          seen.add(item.id);
+          added++;
+        }
+      });
+      saveData(existing);
+      if (parsed.dailyBudget && parseInt(parsed.dailyBudget,10) > 0) setDailyBudget(parseInt(parsed.dailyBudget,10));
+      renderStorageInfo();
+      renderHistory();
+      renderHome();
+      showToast(`Imported ${added} new`);
+    } catch (err) {
+      showToast('Invalid file');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
 });
 
 // Edit daily budget
