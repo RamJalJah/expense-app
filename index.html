@@ -623,7 +623,7 @@ body {
 
   <!-- This month's expenses -->
   <div class="today-list">
-    <div class="section-title">This Month's Expenses</div>
+    <div class="section-title">Recent Expenses (last 30 days)</div>
     <div id="today-expenses"></div>
   </div>
 </div>
@@ -821,25 +821,29 @@ function renderHome() {
   document.getElementById('remaining-month').textContent = fmt(Math.max(0, remMonth));
   document.getElementById('remaining-month').style.color = remMonth < 0 ? 'var(--red)' : 'var(--green)';
 
-  // This month's expense list grouped by day
+  // Recent expenses list (last 30 days, grouped by day)
   const container = document.getElementById('today-expenses');
-  if (monthData.length === 0) {
-    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-size:14px;">No expenses yet this month</div>';
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - 30);
+  const recentData = data.filter(e => new Date(e.ts) >= cutoff);
+  if (recentData.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-size:14px;">No recent expenses</div>';
   } else {
     const byDay = {};
-    monthData.forEach(e => {
-      const dk = getDateKey(new Date(e.ts));
-      if (!byDay[dk]) byDay[dk] = [];
-      byDay[dk].push(e);
+    recentData.forEach(e => {
+      const dKey = getDateKey(new Date(e.ts));
+      if (!byDay[dKey]) byDay[dKey] = [];
+      byDay[dKey].push(e);
     });
+    const monthNamesShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const dayKeys = Object.keys(byDay).sort().reverse();
     const todayKey = dk;
     container.innerHTML = dayKeys.map(dayKey => {
       const dayItems = byDay[dayKey];
       const dayTotal = dayItems.reduce((s,e) => s + e.amount, 0);
-      const dayNum = parseInt(dayKey.split('-')[2]);
+      const [yy,mm,dd] = dayKey.split('-').map(Number);
       const dayColor = dayTotal > DAILY_BUDGET ? 'var(--red)' : dayTotal > DAILY_BUDGET * 0.8 ? 'var(--yellow)' : 'var(--green)';
-      const label = dayKey === todayKey ? 'Today' : `Day ${dayNum}`;
+      const label = dayKey === todayKey ? 'Today' : `${monthNamesShort[mm-1]} ${dd}`;
       return `<div style="font-size:13px;font-weight:600;color:var(--muted);display:flex;justify-content:space-between;margin:14px 0 6px;text-transform:uppercase;letter-spacing:0.8px">
           <span>${label}</span><span style="color:${dayColor}">${fmt(dayTotal)}</span>
         </div>` +
